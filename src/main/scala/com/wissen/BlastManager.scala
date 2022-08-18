@@ -1,7 +1,10 @@
 package com.wissen
 
+import java.io.File
+
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
+import org.codehaus.janino.Java
 
 
 object BlastManager {
@@ -52,10 +55,9 @@ object BlastManager {
       x.foreach( x => writer.write(x.split("-")(0) + "\n"))
       writer.close()
 
-      val command = "cd /Users/balaji/Downloads/bio-info && /Users/balaji/Downloads/bio-info/ncbi-blast-2.13.0+/bin/blastn -query " + fileName + " -db GRCh38_latest_genomic.fna -outfmt 5 -out " + basePath + "result-" + index + ".xml"
-      println(command)
+      val command = "cd /Users/balaji/Downloads/bio-info && /Users/balaji/Downloads/bio-info/ncbi-blast-2.13.0/bin/blastn -query " + fileName + " -db GRCh38_latest_genomic.fna -outfmt '6 std scomname' -out " + basePath + "result-" + index + ".tab -subject_besthit"
 
-      val res = Process(command)!!
+      val res = Process(s"/Users/balaji/Downloads/bio-info/ncbi-blast-2.13.0/bin/blastn -query $fileName -db GRCh38_latest_genomic.fna -outfmt 6 -out ${basePath}result-${index}.tab -subject_besthit", new File("/Users/balaji/Downloads/bio-info")).!!
 
       println(res)
 
