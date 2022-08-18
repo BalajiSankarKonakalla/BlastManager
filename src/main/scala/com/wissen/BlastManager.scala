@@ -1,6 +1,6 @@
 package com.wissen
 
-import java.io.File
+import java.io.{BufferedReader, File, FileInputStream, InputStreamReader}
 
 import org.apache.spark.sql.SparkSession
 import org.apache.spark.sql.functions._
@@ -59,9 +59,18 @@ object BlastManager {
 
       val res = Process(s"/Users/balaji/Downloads/bio-info/ncbi-blast-2.13.0/bin/blastn -query $fileName -db GRCh38_latest_genomic.fna -outfmt 6 -out ${basePath}result-${index}.tab -subject_besthit", new File("/Users/balaji/Downloads/bio-info")).!!
 
-      println(res)
+    })
+
+    val result = fastaWithPartition.mapPartitions( x => {
+      val index = x.take(1).toList.head.split("-").toList(1)
+      val basePath = "/Users/balaji/Downloads/bio-info/tmp/partitioned-inputs/"
+      val fileName = basePath + s"result-$index.tab"
+
+      scala.io.Source.fromFile(fileName).getLines()
 
     })
+
+    result.foreach(println)
 
   }
 }
