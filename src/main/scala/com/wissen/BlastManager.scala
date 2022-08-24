@@ -4,8 +4,10 @@ import java.io.File
 
 import org.apache.spark.sql.SparkSession
 
+import org.apache.hadoop.conf.Configuration
+import org.apache.hadoop.fs.{FileSystem, Path}
 
-object BlastManager {
+object BlastManager extends Serializable {
 
   def main(args : Array[String]) {
 
@@ -21,6 +23,9 @@ object BlastManager {
       .appName("blast")
       //.master("local[*]")
       .getOrCreate()
+
+    val hadoopConfig = new Configuration()
+    val hdfs = FileSystem.get(hadoopConfig)
 
     val fastaRdd = spark
       .sparkContext
@@ -45,7 +50,7 @@ object BlastManager {
     val fastaWithPartition = fastaWithFormat.mapPartitionsWithIndex((index, x) => {
       x.map(s => s + "-" + index)
     })
-
+     hdfs.mkdirs(new Path(outputPath))
 
     fastaWithPartition.foreachPartition(x => {
       import java.io.{BufferedWriter, FileOutputStream, OutputStreamWriter}
@@ -65,18 +70,9 @@ object BlastManager {
 
       val res = Process(s"blastn -query $fileName -db GRCh38_latest_genomic.fna -outfmt 6 -out ${basePath}result-${index}.tab", new File("/home/dc-user/blast/ncbi-blast-2.13.0/bin")).!!
 
+      val hadoopConfig = new Configuration()
+      val hdfs = FileSystem.get(hadoopConfig)
+      hdfs.copyFromLocalFile(new Path(s"${basePath}result-${index}.tab"), new Path(outputPath + "/"))
     })
-
-    val result = fastaWithPartition.mapPartitions( x => {
-      val index = x.take(1).toList.head.split("-").toList(1)
-      val basePath = intermediatePath + "/"
-      val fileName = basePath + s"result-$index.tab"
-
-      scala.io.Source.fromFile(fileName).getLines()
-
-    })
-
-    result.saveAsTextFile(outputPath)
-
   }
 }
