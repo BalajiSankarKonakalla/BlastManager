@@ -1,41 +1,44 @@
 package com.wissen
 
-import java.io.{BufferedReader, File, FileInputStream, InputStreamReader}
+import java.io.File
 
 import org.apache.spark.sql.SparkSession
-import org.apache.spark.sql.functions._
-import org.codehaus.janino.Java
 
 
 object BlastManager {
 
   def main(args : Array[String]) {
 
+
+    val inputPath = args(0)
+    val intermediatePath = args(1)
+    val outputPath = args(2)
+    val numPartitions = args(3).toInt
+
+
     val spark = SparkSession
       .builder()
       .appName("blast")
-      .master("local[*]")
+      //.master("local[*]")
       .getOrCreate()
-
-    import spark.implicits._
 
     val fastaRdd = spark
       .sparkContext
-      .textFile("/Users/balaji/Downloads/bio-info/10_ERR187285_1.fasta")
+      .textFile(inputPath)
 
-    val modified =           // Needed only if we can't modify the fasta creation
+    val modified =
     fastaRdd
       .zipWithIndex()
       .zipWithIndex()
-      .map(x => (Math.floor( x._1._2 / 3 ), (x._1._1, x._2)) )
+      .map(x => (Math.floor( x._1._2 / 2 ), (x._1._1, x._2)) )
       .groupByKey()
       .map(x => x._2.toList)
-      .filter(_.length == 3)
+      .filter(_.length == 2)
       .map(x => x.map(x => x._1))
-      .map(x => x(0) + "&" + x(1) + x(2))
+      .map(x => x.head + "&" + x(1))
 
 
-    val fastaRepartitionedRdd = modified.repartition(2)
+    val fastaRepartitionedRdd = modified.repartition(numPartitions)
 
     val fastaWithFormat = fastaRepartitionedRdd.map(x => x.replace("&", "\n"))
 
@@ -46,31 +49,34 @@ object BlastManager {
 
     fastaWithPartition.foreachPartition(x => {
       import java.io.{BufferedWriter, FileOutputStream, OutputStreamWriter}
+
       import scala.sys.process._
 
       val index = x.take(1).toList.head.split("-").toList(1)
-      val basePath = "/Users/balaji/Downloads/bio-info/tmp/partitioned-inputs/"
+      val basePath = intermediatePath+"/"
       val fileName = basePath + "fastaFile-" + index + ".fasta"
       val writer = new BufferedWriter(new OutputStreamWriter(new FileOutputStream(fileName)))
       x.foreach( x => writer.write(x.split("-")(0) + "\n"))
       writer.close()
 
-      val command = "cd /Users/balaji/Downloads/bio-info && /Users/balaji/Downloads/bio-info/ncbi-blast-2.13.0/bin/blastn -query " + fileName + " -db GRCh38_latest_genomic.fna -outfmt '6 std scomname' -out " + basePath + "result-" + index + ".tab -subject_besthit"
+      val command = "cd /home/dc-user/blast/ncbi-blast-2.13.0/bin && blastn -query " + fileName + " -db GRCh38_latest_genomic.fna -outfmt '6 std scomname' -out " + basePath + "result-" + index + ".tab -subject_besthit"
 
-      val res = Process(s"/Users/balaji/Downloads/bio-info/ncbi-blast-2.13.0/bin/blastn -query $fileName -db GRCh38_latest_genomic.fna -outfmt 6 -out ${basePath}result-${index}.tab -subject_besthit", new File("/Users/balaji/Downloads/bio-info")).!!
+      println(s"blastn -query $fileName -db GRCh38_latest_genomic.fna -outfmt 6 -out ${basePath}result-${index}.tab -subject_besthit")
+
+      val res = Process(s"blastn -query $fileName -db GRCh38_latest_genomic.fna -outfmt 6 -out ${basePath}result-${index}.tab", new File("/home/dc-user/blast/ncbi-blast-2.13.0/bin")).!!
 
     })
 
     val result = fastaWithPartition.mapPartitions( x => {
       val index = x.take(1).toList.head.split("-").toList(1)
-      val basePath = "/Users/balaji/Downloads/bio-info/tmp/partitioned-inputs/"
+      val basePath = intermediatePath + "/"
       val fileName = basePath + s"result-$index.tab"
 
       scala.io.Source.fromFile(fileName).getLines()
 
     })
 
-    result.foreach(println)
+    result.saveAsTextFile(outputPath)
 
   }
 }
