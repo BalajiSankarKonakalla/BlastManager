@@ -11,12 +11,10 @@ object BlastManager extends Serializable {
 
   def main(args : Array[String]) {
 
-
     val inputPath = args(0)
     val intermediatePath = args(1)
     val outputPath = args(2)
     val numPartitions = args(3).toInt
-
 
     val spark = SparkSession
       .builder()
@@ -68,7 +66,7 @@ object BlastManager extends Serializable {
 
       println(s"blastn -query $fileName -db GRCh38_latest_genomic.fna -outfmt 6 -out ${basePath}result-${index}.tab -subject_besthit")
 
-      val res = Process(s"blastn -query $fileName -db GRCh38_latest_genomic.fna -outfmt 6 -out ${basePath}result-${index}.tab", new File("/home/dc-user/blast/ncbi-blast-2.13.0/bin")).!!
+      val res = Process(s"blastn -query $fileName -db GRCh38_latest_genomic.fna -max_hsps 1 -max_target_seqs 5 -outfmt 6 -out ${basePath}result-${index}.tab", new File("/home/dc-user/blast/ncbi-blast-2.13.0/bin")).!!
 
       val hadoopConfig = new Configuration()
       val hdfs = FileSystem.get(hadoopConfig)
